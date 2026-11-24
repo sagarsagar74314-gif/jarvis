@@ -66,10 +66,8 @@ class MyraService : Service() {
         manager.createNotificationChannel(
             NotificationChannel(channelId, "Jarvis", NotificationManager.IMPORTANCE_LOW)
         )
-                val intent = Intent(this, Class.forName("com.myra.assistant.MainActivity"))
+                  val intent = Intent(this, Class.forName("com.myra.assistant.MainActivity"))
         val pendingIntent = PendingIntent.getActivity(this, 0, intent, PendingIntent.FLAG_IMMUTABLE)
-            PendingIntent.FLAG_IMMUTABLE
-                val openIntent = intent
         val notification = Notification.Builder(this, channelId)
             .setContentTitle("Jarvis चालू है")
             .setContentText("\"Jarvis\" बोलो")
