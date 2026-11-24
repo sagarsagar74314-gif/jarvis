@@ -84,6 +84,8 @@ class CommandHandler(private val context: Context) {
         "मैसेज" to "messages"
     )
 
+    private var lastAppCount = 0
+
     init {
         tts = TextToSpeech(context) { status ->
             if (status == TextToSpeech.SUCCESS) {
@@ -351,7 +353,14 @@ class CommandHandler(private val context: Context) {
     private fun openApp(text: String, silent: Boolean = false): Boolean {
         val app = findApp(text)
         if (app == null) {
-            if (!silent) say("यह ऐप नहीं मिला")
+            if (!silent) {
+                say("यह ऐप नहीं मिला")
+                Toast.makeText(
+                    context,
+                    "सुना: $text | फोन में दिखे ऐप: $lastAppCount",
+                    Toast.LENGTH_LONG
+                ).show()
+            }
             return false
         }
         val intent = context.packageManager.getLaunchIntentForPackage(app.second)
@@ -364,6 +373,23 @@ class CommandHandler(private val context: Context) {
         return true
     }
 
+    private fun installedApps(): List<Pair<String, String>> {
+        val pm = context.packageManager
+        val list = mutableListOf<Pair<String, String>>()
+        val main = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER)
+        for (info in pm.queryIntentActivities(main, 0)) {
+            list.add(Pair(info.loadLabel(pm).toString(), info.activityInfo.packageName))
+        }
+        if (list.size < 5) {
+            for (appInfo in pm.getInstalledApplications(0)) {
+                if (pm.getLaunchIntentForPackage(appInfo.packageName) != null) {
+                    list.add(Pair(pm.getApplicationLabel(appInfo).toString(), appInfo.packageName))
+                }
+            }
+        }
+        return list
+    }
+
     private fun findApp(text: String): Pair<String, String>? {
         var fixed = squash(text)
         aliases.entries
@@ -372,18 +398,16 @@ class CommandHandler(private val context: Context) {
                 fixed = fixed.replace(squash(hindi), english)
             }
 
-        val pm = context.packageManager
-        val main = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER)
-        val apps = pm.queryIntentActivities(main, 0)
+        val apps = installedApps()
+        lastAppCount = apps.size
 
         var best: Pair<String, String>? = null
         var bestLength = 0
-        for (info in apps) {
-            val label = squash(info.loadLabel(pm).toString())
-            val pkg = info.activityInfo.packageName
+        for ((name, pkg) in apps) {
             if (pkg == context.packageName) continue
+            val label = squash(name)
             if (label.length >= 3 && fixed.contains(label) && label.length > bestLength) {
-                best = Pair(info.loadLabel(pm).toString(), pkg)
+                best = Pair(name, pkg)
                 bestLength = label.length
             }
         }
