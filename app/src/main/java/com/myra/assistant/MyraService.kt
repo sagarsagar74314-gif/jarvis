@@ -74,7 +74,7 @@ class MyraService : Service() {
             .setContentTitle("Jarvis चालू है")
             .setContentText("\"Jarvis\" बोलो")
             .setSmallIcon(android.R.drawable.ic_btn_speak_now)
-            .setContentIntent
+            .setContentIntent(pendingIntent)
             .setOngoing(true)
             .build()
         if (Build.VERSION.SDK_INT >= 29) {
