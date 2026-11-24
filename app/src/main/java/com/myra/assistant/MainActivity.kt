@@ -17,7 +17,6 @@ import android.text.InputType
 import android.view.Gravity
 import android.view.View
 import android.view.animation.AccelerateDecelerateInterpolator
-import android.view.inputmethod.InputMethodManager
 import android.widget.Button
 import android.widget.EditText
 import android.widget.FrameLayout
@@ -33,247 +32,270 @@ import androidx.core.app.ActivityCompat
 class MainActivity : AppCompatActivity() {
 
     private lateinit var characterAvatar: ImageView
-    private lateinit var statusText: TextView
-    private lateinit var chatBox: EditText
-    private lateinit var micButton: Button
+    private lateinit var glowRingView: View
+    private lateinit var waveBarView: View
+    private lateinit var speakingStatusText: TextView
+    private lateinit var subHintText: TextView
+    private lateinit var stopSessionBtn: Button
+    private lateinit var commandInput: EditText
 
-    private var isActiveReaction = false
-    private var reactionAnimator: AnimatorSet? = null
+    private var isSpeakingOrReacting = false
+    private var characterAnimator: AnimatorSet? = null
+    private var waveAnimator: ObjectAnimator? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
         val scrollView = ScrollView(this).apply {
-            setBackgroundColor(Color.parseColor("#050811"))
+            setBackgroundColor(Color.parseColor("#000000"))
             isFillViewport = true
         }
 
         val root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            gravity = Gravity.CENTER_HORIZONTAL
-            setPadding(28, 36, 28, 36)
+            setPadding(36, 44, 36, 44)
         }
 
-        // Top Header: JARVIS
-        val titleView = TextView(this).apply {
-            text = "JARVIS"
-            textSize = 28f
+        // Top Greeting Header (30029.jpg style)
+        val greetingTitle = TextView(this).apply {
+            text = "Hello, JARVIS."
+            textSize = 30f
             setTypeface(null, Typeface.BOLD)
-            setTextColor(Color.parseColor("#38F2FF"))
-            gravity = Gravity.CENTER
-            setPadding(0, 0, 0, 12)
+            setTextColor(Color.WHITE)
         }
-        root.addView(titleView)
+        root.addView(greetingTitle)
 
-        // Character Reaction Status
-        statusText = TextView(this).apply {
-            text = "JARVIS रिएक्शन: OFF (शांत)"
-            textSize = 13f
-            setTextColor(Color.parseColor("#9FB3C8"))
-            gravity = Gravity.CENTER
-            setPadding(0, 0, 0, 18)
+        val subtitleView = TextView(this).apply {
+            text = "What shall we do today?"
+            textSize = 15f
+            setTextColor(Color.parseColor("#B8B8B8"))
+            setPadding(0, 6, 0, 28)
         }
-        root.addView(statusText)
+        root.addView(subtitleView)
 
-        // Middle Stage: Left Tabs (MEMORY, SKILLS, CHARACTER, SETTING) + Center Girl Character
-        val middleRow = LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.CENTER_VERTICAL
-            layoutParams = LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT,
-                LinearLayout.LayoutParams.WRAP_CONTENT
-            ).apply {
-                bottomMargin = 24
+        // Center Portrait inside Orange Glowing Ring
+        val portraitFrame = FrameLayout(this).apply {
+            layoutParams = LinearLayout.LayoutParams(540, 540).apply {
+                gravity = Gravity.CENTER_HORIZONTAL
+                bottomMargin = 26
             }
         }
 
-        val leftTabsColumn = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 0.42f)
-        }
-
-        val tabs = listOf(
-            Triple("MEMORY", "#00E5FF", "MEMORY मोड सक्रिय"),
-            Triple("SKILLS", "#00E676", "SKILLS मोड सक्रिय"),
-            Triple("CHARACTER", "#FF2A55", "CHARACTER रिएक्शन मोड"),
-            Triple("SETTING", "#E0E8FF", "SETTING मोड सक्रिय")
-        )
-
-        for ((label, hexColor, msg) in tabs) {
-            val tabBtn = Button(this).apply {
-                text = label
-                textSize = 11f
-                setTypeface(null, Typeface.BOLD)
-                setTextColor(Color.WHITE)
-                background = GradientDrawable().apply {
-                    shape = GradientDrawable.RECTANGLE
-                    cornerRadius = 18f
-                    setColor(Color.parseColor("#0D1526"))
-                    setStroke(3, Color.parseColor(hexColor))
-                }
-                layoutParams = LinearLayout.LayoutParams(
-                    LinearLayout.LayoutParams.MATCH_PARENT,
-                    LinearLayout.LayoutParams.WRAP_CONTENT
-                ).apply {
-                    bottomMargin = 14
-                }
-                setOnClickListener {
-                    statusText.text = "JARVIS: $msg"
-                    if (label == "CHARACTER") {
-                        toggleCharacterReaction(!isActiveReaction)
-                    } else if (label == "SETTING") {
-                        openOverlaySettings()
-                    }
-                }
-            }
-            leftTabsColumn.addView(tabBtn)
-        }
-
-        // Center Character Container with Glowing Ring
-        val avatarContainer = FrameLayout(this).apply {
-            layoutParams = LinearLayout.LayoutParams(0, 420, 0.58f).apply {
-                leftMargin = 14
-            }
-        }
-
-        val glowRing = View(this).apply {
-            layoutParams = FrameLayout.LayoutParams(370, 370, Gravity.CENTER)
+        glowRingView = View(this).apply {
+            layoutParams = FrameLayout.LayoutParams(520, 520, Gravity.CENTER)
             background = GradientDrawable().apply {
                 shape = GradientDrawable.OVAL
-                setColor(Color.parseColor("#0A1324"))
-                setStroke(8, Color.parseColor("#00E5FF"))
+                setColor(Color.parseColor("#080402"))
+                setStroke(10, Color.parseColor("#FF5A1F"))
             }
         }
-        avatarContainer.addView(glowRing)
+        portraitFrame.addView(glowRingView)
 
         characterAvatar = ImageView(this).apply {
-            layoutParams = FrameLayout.LayoutParams(340, 340, Gravity.CENTER)
+            layoutParams = FrameLayout.LayoutParams(476, 476, Gravity.CENTER)
             scaleType = ImageView.ScaleType.CENTER_CROP
+            background = GradientDrawable().apply {
+                shape = GradientDrawable.OVAL
+                setColor(Color.parseColor("#140A05"))
+            }
+            clipToOutline = true
+            outlineProvider = object : android.view.ViewOutlineProvider() {
+                override fun getOutline(view: View, outline: android.graphics.Outline) {
+                    outline.setOval(0, 0, view.width, view.height)
+                }
+            }
             val resId = resources.getIdentifier("jarvis_character", "drawable", packageName)
             if (resId != 0) {
                 setImageResource(resId)
             }
             setOnClickListener {
-                toggleCharacterReaction(!isActiveReaction)
+                toggleSpeakingReaction(!isSpeakingOrReacting)
             }
         }
-        avatarContainer.addView(characterAvatar)
+        portraitFrame.addView(characterAvatar)
+        root.addView(portraitFrame)
 
-        middleRow.addView(leftTabsColumn)
-        middleRow.addView(avatarContainer)
-        root.addView(middleRow)
+        // Orange Sound Wave Bar below Portrait
+        waveBarView = View(this).apply {
+            layoutParams = LinearLayout.LayoutParams(420, 14).apply {
+                gravity = Gravity.CENTER_HORIZONTAL
+                bottomMargin = 22
+            }
+            background = GradientDrawable().apply {
+                shape = GradientDrawable.RECTANGLE
+                cornerRadius = 12f
+                setColor(Color.parseColor("#FF5A1F"))
+            }
+        }
+        root.addView(waveBarView)
 
-        // Bottom Bar: Single Main Mic + Chat Box + Keyboard Icon + Send Icon
-        val bottomBar = LinearLayout(this).apply {
+        // Speaking Status & Tap Hint
+        speakingStatusText = TextView(this).apply {
+            text = "JARVIS is idle..."
+            textSize = 17f
+            setTypeface(null, Typeface.BOLD)
+            setTextColor(Color.parseColor("#FF5A1F"))
+            gravity = Gravity.CENTER
+            setPadding(0, 0, 0, 8)
+        }
+        root.addView(speakingStatusText)
+
+        subHintText = TextView(this).apply {
+            text = "Speak to interrupt · or tap the portrait"
+            textSize = 13f
+            setTextColor(Color.parseColor("#A6A6A6"))
+            gravity = Gravity.CENTER
+            setPadding(0, 0, 0, 28)
+        }
+        root.addView(subHintText)
+
+        // Bottom Controls Row: Left Eye/Mode Button + Orange Stop Session Button + Right Mic Button
+        val actionRow = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
             layoutParams = LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT,
                 LinearLayout.LayoutParams.WRAP_CONTENT
             ).apply {
-                bottomMargin = 24
+                bottomMargin = 18
             }
         }
 
-        micButton = Button(this).apply {
-            text = "MIC"
-            textSize = 11f
-            setTypeface(null, Typeface.BOLD)
-            setTextColor(Color.parseColor("#00E5FF"))
+        val leftModeBtn = Button(this).apply {
+            text = "👁"
+            textSize = 18f
+            setTextColor(Color.WHITE)
             background = GradientDrawable().apply {
                 shape = GradientDrawable.OVAL
-                setColor(Color.parseColor("#102238"))
-                setStroke(4, Color.parseColor("#00E5FF"))
+                setColor(Color.parseColor("#141414"))
             }
-            layoutParams = LinearLayout.LayoutParams(120, 120).apply {
-                rightMargin = 10
+            layoutParams = LinearLayout.LayoutParams(116, 116).apply {
+                rightMargin = 16
             }
             setOnClickListener {
-                val nextState = !isActiveReaction
-                toggleCharacterReaction(nextState)
-                if (nextState) {
-                    val spokenCmd = chatBox.text.toString().trim().ifEmpty { "jarvis status" }
-                    statusText.text = "JARVIS बात कर रही है: $spokenCmd"
-                    dispatchCommand(spokenCmd)
-                } else {
-                    statusText.text = "JARVIS रिएक्शन: OFF"
+                openOverlaySettings()
+            }
+        }
+
+        stopSessionBtn = Button(this).apply {
+            text = "■  Stop session"
+            textSize = 16f
+            setTypeface(null, Typeface.BOLD)
+            setTextColor(Color.WHITE)
+            background = GradientDrawable().apply {
+                shape = GradientDrawable.RECTANGLE
+                cornerRadius = 48f
+                setColor(Color.parseColor("#FF5A1F"))
+            }
+            layoutParams = LinearLayout.LayoutParams(0, 116, 1f).apply {
+                rightMargin = 16
+            }
+            setOnClickListener {
+                toggleSpeakingReaction(false)
+                speakingStatusText.text = "Session stopped"
+            }
+        }
+
+        val rightMicBtn = Button(this).apply {
+            text = "🎙"
+            textSize = 18f
+            setTextColor(Color.parseColor("#FF5A1F"))
+            background = GradientDrawable().apply {
+                shape = GradientDrawable.OVAL
+                setColor(Color.parseColor("#1A0D07"))
+            }
+            layoutParams = LinearLayout.LayoutParams(116, 116)
+            setOnClickListener {
+                val next = !isSpeakingOrReacting
+                toggleSpeakingReaction(next)
+                if (next) {
+                    val cmd = commandInput.text.toString().trim().ifEmpty { "jarvis hello" }
+                    dispatchCommand(cmd)
                 }
             }
         }
 
-        chatBox = EditText(this).apply {
-            hint = "यहाँ लिखें..."
-            setHintTextColor(Color.parseColor("#7D8DA6"))
+        actionRow.addView(leftModeBtn)
+        actionRow.addView(stopSessionBtn)
+        actionRow.addView(rightMicBtn)
+        root.addView(actionRow)
+
+        // Optional Quick Text Command Input
+        commandInput = EditText(this).apply {
+            hint = "Type a command or message..."
+            setHintTextColor(Color.parseColor("#777777"))
             setTextColor(Color.WHITE)
             textSize = 14f
             isSingleLine = true
             maxLines = 1
             background = GradientDrawable().apply {
                 shape = GradientDrawable.RECTANGLE
-                cornerRadius = 32f
-                setColor(Color.parseColor("#101829"))
-                setStroke(3, Color.parseColor("#2A3F63"))
+                cornerRadius = 28f
+                setColor(Color.parseColor("#111111"))
+                setStroke(2, Color.parseColor("#2E2E2E"))
             }
-            setPadding(24, 18, 24, 18)
-            layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f).apply {
-                rightMargin = 8
+            setPadding(24, 16, 24, 16)
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT
+            ).apply {
+                bottomMargin = 12
             }
         }
+        root.addView(commandInput)
 
-        val keyboardIconBtn = Button(this).apply {
-            text = "KB"
-            textSize = 11f
+        val sendBtn = Button(this).apply {
+            text = "Send & React"
+            textSize = 13f
             setTypeface(null, Typeface.BOLD)
             setTextColor(Color.WHITE)
             background = GradientDrawable().apply {
-                shape = GradientDrawable.OVAL
-                setColor(Color.parseColor("#131D33"))
-                setStroke(3, Color.parseColor("#3A4F75"))
+                shape = GradientDrawable.RECTANGLE
+                cornerRadius = 26f
+                setColor(Color.parseColor("#1F110B"))
+                setStroke(2, Color.parseColor("#FF5A1F"))
             }
-            layoutParams = LinearLayout.LayoutParams(105, 105).apply {
-                rightMargin = 8
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT
+            ).apply {
+                bottomMargin = 20
             }
             setOnClickListener {
-                chatBox.requestFocus()
-                val imm = getSystemService(Context.INPUT_METHOD_SERVICE) as InputMethodManager
-                imm.showSoftInput(chatBox, InputMethodManager.SHOW_IMPLICIT)
-                statusText.text = "कीबोर्ड खोला गया"
-            }
-        }
-
-        val sendIconBtn = Button(this).apply {
-            text = "SEND"
-            textSize = 10f
-            setTypeface(null, Typeface.BOLD)
-            setTextColor(Color.parseColor("#FF2A55"))
-            background = GradientDrawable().apply {
-                shape = GradientDrawable.OVAL
-                setColor(Color.parseColor("#24101A"))
-                setStroke(3, Color.parseColor("#FF2A55"))
-            }
-            layoutParams = LinearLayout.LayoutParams(105, 105)
-            setOnClickListener {
-                val cmd = chatBox.text.toString().trim()
+                val cmd = commandInput.text.toString().trim()
                 if (cmd.isNotEmpty()) {
-                    toggleCharacterReaction(true)
-                    statusText.text = "JARVIS रिएक्शन: $cmd"
+                    toggleSpeakingReaction(true)
+                    speakingStatusText.text = "JARVIS is speaking..."
                     dispatchCommand(cmd)
-                    chatBox.setText("")
+                    commandInput.setText("")
                 } else {
-                    toggleCharacterReaction(false)
-                    statusText.text = "JARVIS रिएक्शन: OFF"
+                    toggleSpeakingReaction(false)
                 }
             }
         }
+        root.addView(sendBtn)
 
-        bottomBar.addView(micButton)
-        bottomBar.addView(chatBox)
-        bottomBar.addView(keyboardIconBtn)
-        bottomBar.addView(sendIconBtn)
-        root.addView(bottomBar)
+        // Footer Info Line (30029.jpg style)
+        val privacyNote = TextView(this).apply {
+            text = "You control the mic. Screen sharing is always opt-in."
+            textSize = 12f
+            setTextColor(Color.parseColor("#8E8E8E"))
+            gravity = Gravity.CENTER
+            setPadding(0, 0, 0, 12)
+        }
+        root.addView(privacyNote)
 
-        // Compact Control & Gemini Key Row
-        val setupRow = HorizontalScrollView(this).apply {
+        val speakerWakeNote = TextView(this).apply {
+            text = "🎧 Phone speaker · Wake word off"
+            textSize = 12f
+            setTextColor(Color.parseColor("#B5B5B5"))
+            gravity = Gravity.CENTER
+            setPadding(0, 0, 0, 28)
+        }
+        root.addView(speakerWakeNote)
+
+        // Setup & Gemini Key Section (scroll down to configure)
+        val setupScroll = HorizontalScrollView(this).apply {
             layoutParams = LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT,
                 LinearLayout.LayoutParams.WRAP_CONTENT
@@ -282,24 +304,22 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
-        val setupButtonsBox = LinearLayout(this).apply {
+        val setupRow = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
         }
-
-        setupButtonsBox.addView(makeSmallActionButton("1. परमिशन") { askPermissions() })
-        setupButtonsBox.addView(makeSmallActionButton("2. ओवरले") { openOverlaySettings() })
-        setupButtonsBox.addView(makeSmallActionButton("3. एक्सेसिबिलिटी") {
+        setupRow.addView(makeSetupButton("1. Permissions") { askPermissions() })
+        setupRow.addView(makeSetupButton("2. Overlay") { openOverlaySettings() })
+        setupRow.addView(makeSetupButton("3. Accessibility") {
             startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
         })
-        setupButtonsBox.addView(makeSmallActionButton("5. JARVIS शुरू") {
-            toggleCharacterReaction(true)
-            startJarvis()
+        setupRow.addView(makeSetupButton("5. Start Service") {
+            toggleSpeakingReaction(true)
+            startJarvisService()
         })
+        setupScroll.addView(setupRow)
+        root.addView(setupScroll)
 
-        setupRow.addView(setupButtonsBox)
-        root.addView(setupRow)
-
-        val keyBox = EditText(this).apply {
+        val keyInput = EditText(this).apply {
             hint = "Gemini key यहाँ डालें"
             setHintTextColor(Color.GRAY)
             setTextColor(Color.WHITE)
@@ -309,8 +329,8 @@ class MainActivity : AppCompatActivity() {
             background = GradientDrawable().apply {
                 shape = GradientDrawable.RECTANGLE
                 cornerRadius = 20f
-                setColor(Color.parseColor("#101829"))
-                setStroke(2, Color.parseColor("#2A3F63"))
+                setColor(Color.parseColor("#111111"))
+                setStroke(2, Color.parseColor("#2E2E2E"))
             }
             setPadding(24, 16, 24, 16)
             layoutParams = LinearLayout.LayoutParams(
@@ -320,7 +340,7 @@ class MainActivity : AppCompatActivity() {
                 bottomMargin = 10
             }
         }
-        root.addView(keyBox)
+        root.addView(keyInput)
 
         val saveKeyBtn = Button(this).apply {
             text = "4. Key सेव करें"
@@ -328,15 +348,15 @@ class MainActivity : AppCompatActivity() {
             background = GradientDrawable().apply {
                 shape = GradientDrawable.RECTANGLE
                 cornerRadius = 20f
-                setColor(Color.parseColor("#16243B"))
-                setStroke(2, Color.parseColor("#00E5FF"))
+                setColor(Color.parseColor("#171717"))
+                setStroke(2, Color.parseColor("#FF5A1F"))
             }
             layoutParams = LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT,
                 LinearLayout.LayoutParams.WRAP_CONTENT
             )
             setOnClickListener {
-                val key = keyBox.text.toString().trim()
+                val key = keyInput.text.toString().trim()
                 if (key.isEmpty()) {
                     Toast.makeText(this@MainActivity, "पहले key डालें", Toast.LENGTH_SHORT).show()
                 } else {
@@ -344,7 +364,7 @@ class MainActivity : AppCompatActivity() {
                         .edit()
                         .putString("gemini_key", key)
                         .apply()
-                    keyBox.setText("")
+                    keyInput.setText("")
                     Toast.makeText(this@MainActivity, "Key सेव हो गई", Toast.LENGTH_SHORT).show()
                 }
             }
@@ -354,7 +374,54 @@ class MainActivity : AppCompatActivity() {
         scrollView.addView(root)
         setContentView(scrollView)
 
-        toggleCharacterReaction(false)
+        toggleSpeakingReaction(false)
+    }
+
+    private fun toggleSpeakingReaction(reacting: Boolean) {
+        isSpeakingOrReacting = reacting
+        characterAnimator?.cancel()
+        waveAnimator?.cancel()
+
+        if (reacting) {
+            speakingStatusText.text = "JARVIS is speaking..."
+            speakingStatusText.setTextColor(Color.parseColor("#FF5A1F"))
+
+            val scaleX = ObjectAnimator.ofFloat(characterAvatar, View.SCALE_X, 0.96f, 1.07f).apply {
+                repeatCount = ValueAnimator.INFINITE
+                repeatMode = ValueAnimator.REVERSE
+                duration = 520
+            }
+            val scaleY = ObjectAnimator.ofFloat(characterAvatar, View.SCALE_Y, 0.96f, 1.07f).apply {
+                repeatCount = ValueAnimator.INFINITE
+                repeatMode = ValueAnimator.REVERSE
+                duration = 520
+            }
+            val tilt = ObjectAnimator.ofFloat(characterAvatar, View.ROTATION, -3.5f, 3.5f).apply {
+                repeatCount = ValueAnimator.INFINITE
+                repeatMode = ValueAnimator.REVERSE
+                duration = 680
+            }
+
+            characterAnimator = AnimatorSet().apply {
+                interpolator = AccelerateDecelerateInterpolator()
+                playTogether(scaleX, scaleY, tilt)
+                start()
+            }
+
+            waveAnimator = ObjectAnimator.ofFloat(waveBarView, View.SCALE_X, 0.55f, 1.15f).apply {
+                repeatCount = ValueAnimator.INFINITE
+                repeatMode = ValueAnimator.REVERSE
+                duration = 320
+                start()
+            }
+        } else {
+            speakingStatusText.text = "JARVIS is idle..."
+            speakingStatusText.setTextColor(Color.parseColor("#A86C52"))
+            characterAvatar.scaleX = 1f
+            characterAvatar.scaleY = 1f
+            characterAvatar.rotation = 0f
+            waveBarView.scaleX = 0.65f
+        }
     }
 
     private fun dispatchCommand(cmd: String) {
@@ -371,45 +438,7 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    private fun toggleCharacterReaction(active: Boolean) {
-        isActiveReaction = active
-        reactionAnimator?.cancel()
-
-        if (active) {
-            statusText.text = "JARVIS: बात करते हुए रिएक्शन ACTIVE"
-            statusText.setTextColor(Color.parseColor("#00FFA3"))
-
-            val scaleX = ObjectAnimator.ofFloat(characterAvatar, View.SCALE_X, 0.95f, 1.08f).apply {
-                repeatCount = ValueAnimator.INFINITE
-                repeatMode = ValueAnimator.REVERSE
-                duration = 550
-            }
-            val scaleY = ObjectAnimator.ofFloat(characterAvatar, View.SCALE_Y, 0.95f, 1.08f).apply {
-                repeatCount = ValueAnimator.INFINITE
-                repeatMode = ValueAnimator.REVERSE
-                duration = 550
-            }
-            val tilt = ObjectAnimator.ofFloat(characterAvatar, View.ROTATION, -4f, 4f).apply {
-                repeatCount = ValueAnimator.INFINITE
-                repeatMode = ValueAnimator.REVERSE
-                duration = 700
-            }
-
-            reactionAnimator = AnimatorSet().apply {
-                interpolator = AccelerateDecelerateInterpolator()
-                playTogether(scaleX, scaleY, tilt)
-                start()
-            }
-        } else {
-            statusText.text = "JARVIS रिएक्शन: OFF (बात बंद / शांत)"
-            statusText.setTextColor(Color.parseColor("#9FB3C8"))
-            characterAvatar.scaleX = 1f
-            characterAvatar.scaleY = 1f
-            characterAvatar.rotation = 0f
-        }
-    }
-
-    private fun makeSmallActionButton(label: String, onTap: () -> Unit): Button {
+    private fun makeSetupButton(label: String, onTap: () -> Unit): Button {
         return Button(this).apply {
             text = label
             textSize = 11f
@@ -417,8 +446,8 @@ class MainActivity : AppCompatActivity() {
             background = GradientDrawable().apply {
                 shape = GradientDrawable.RECTANGLE
                 cornerRadius = 18f
-                setColor(Color.parseColor("#11192B"))
-                setStroke(2, Color.parseColor("#354B73"))
+                setColor(Color.parseColor("#141414"))
+                setStroke(2, Color.parseColor("#333333"))
             }
             layoutParams = LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.WRAP_CONTENT,
@@ -456,7 +485,7 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    private fun startJarvis() {
+    private fun startJarvisService() {
         runCatching {
             val serviceClass = Class.forName("com.myra.assistant.MyraService")
             val intent = Intent(this, serviceClass)
@@ -472,7 +501,9 @@ class MainActivity : AppCompatActivity() {
     }
 
     override fun onDestroy() {
-        reactionAnimator?.cancel()
+        characterAnimator?.cancel()
+        waveAnimator?.cancel()
         super.onDestroy()
     }
 }
+
