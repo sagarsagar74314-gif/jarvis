@@ -8,6 +8,8 @@ import android.content.pm.PackageManager
 import android.hardware.camera2.CameraManager
 import android.net.Uri
 import android.provider.AlarmClock
+import android.provider.CalendarContract
+import android.provider.Settings
 import android.speech.tts.TextToSpeech
 import android.widget.Toast
 import androidx.core.content.ContextCompat
@@ -19,6 +21,7 @@ class CommandHandler(private val context: Context) {
 
     private var torchOn = false
     private var tts: TextToSpeech? = null
+    private val brain = GeminiBrain(context)
 
     private val hindiNames = mapOf(
         "यूट्यूब" to "youtube",
@@ -35,7 +38,9 @@ class CommandHandler(private val context: Context) {
         "स्नैपचैट" to "snapchat",
         "प्ले स्टोर" to "play store",
         "कैलकुलेटर" to "calculator",
-        "घड़ी" to "clock"
+        "घड़ी" to "clock",
+        "अमेज़न" to "amazon",
+        "फ्लिपकार्ट" to "flipkart"
     )
 
     init {
@@ -47,8 +52,8 @@ class CommandHandler(private val context: Context) {
     }
 
     private fun say(text: String) {
-        tts?.speak(text, TextToSpeech.QUEUE_FLUSH, null, "myra")
-        Toast.makeText(context, text, Toast.LENGTH_SHORT).show()
+        tts?.speak(text, TextToSpeech.QUEUE_FLUSH, null, "jarvis")
+        Toast.makeText(context, text, Toast.LENGTH_LONG).show()
     }
 
     private fun launch(intent: Intent) {
@@ -62,19 +67,22 @@ class CommandHandler(private val context: Context) {
 
     fun handle(raw: String) {
         val text = raw.lowercase().trim()
+        val short = text.length < 30
 
         when {
-            has(text, "फ्लैशलाइट", "फ्लैश", "टॉर्च", "torch", "flashlight") -> toggleTorch(text)
+            short && has(text, "फ्लैशलाइट", "फ्लैश", "टॉर्च", "torch", "flashlight") -> toggleTorch(text)
 
-            has(text, "समय", "टाइम", "time") -> {
+            short && has(text, "समय", "टाइम", "time") -> {
                 val now = SimpleDateFormat("hh:mm a", Locale.getDefault()).format(Date())
                 say("अभी समय है $now")
             }
 
-            has(text, "तारीख", "तारिख", "date", "आज कौन सा दिन") -> {
+            short && has(text, "तारीख", "तारिख", "date", "आज कौन सा दिन") -> {
                 val now = SimpleDateFormat("EEEE, d MMMM yyyy", Locale("hi", "IN")).format(Date())
                 say("आज $now है")
             }
+
+            has(text, "कैलेंडर", "कैलेण्डर", "calendar") -> openCalendar()
 
             has(text, "अलार्म", "alarm") -> setAlarm(text)
 
@@ -84,6 +92,33 @@ class CommandHandler(private val context: Context) {
 
             has(text, "डिलीट", "uninstall", "हटाओ", "अनइंस्टॉल") -> deleteApp(text)
 
+            has(text, "शॉपिंग", "shopping", "खरीदो", "खरीदना", "ऑर्डर") -> shop(text)
+
+            has(text, "वाईफाई", "वाई-फाई", "wifi", "wi-fi") -> {
+                launch(Intent(Settings.ACTION_WIFI_SETTINGS))
+                say("वाईफाई की सेटिंग खोल रहा हूँ")
+            }
+
+            has(text, "ब्लूटूथ", "bluetooth") -> {
+                launch(Intent(Settings.ACTION_BLUETOOTH_SETTINGS))
+                say("ब्लूटूथ की सेटिंग खोल रहा हूँ")
+            }
+
+            has(text, "ब्राइटनेस", "brightness", "स्क्रीन की रोशनी") -> {
+                launch(Intent(Settings.ACTION_DISPLAY_SETTINGS))
+                say("डिस्प्ले की सेटिंग खोल रहा हूँ")
+            }
+
+            has(text, "आवाज़ बढ़ाओ", "आवाज़ कम", "वॉल्यूम", "volume") -> {
+                launch(Intent(Settings.ACTION_SOUND_SETTINGS))
+                say("साउंड की सेटिंग खोल रहा हूँ")
+            }
+
+            short && has(text, "सेटिंग", "settings") -> {
+                launch(Intent(Settings.ACTION_SETTINGS))
+                say("सेटिंग खोल रहा हूँ")
+            }
+
             has(text, "मौसम", "weather") -> webSearch("आज का मौसम")
 
             has(text, "सर्च", "search", "खोजो", "ढूंढो", "ढूँढो") -> {
@@ -91,11 +126,14 @@ class CommandHandler(private val context: Context) {
                 webSearch(query)
             }
 
-            has(text, "खोल", "open", "ओपन", "चालू करो") -> openApp(text)
+            short && has(text, "खोल", "open", "ओपन", "चालू करो") -> openApp(text)
 
             else -> {
-                // अगर सिर्फ ऐप का नाम बोला हो तो वही खोल दो
-                if (!openApp(text, silent = true)) say("मैं समझ नहीं पाई, फिर से बोलो")
+                // पहले देखो कि सिर्फ ऐप का नाम तो नहीं बोला, वरना AI से पूछो
+                if (!(short && openApp(text, silent = true))) {
+                    say("सोच रहा हूँ...")
+                    brain.ask(raw) { answer -> say(answer) }
+                }
             }
         }
     }
@@ -114,12 +152,32 @@ class CommandHandler(private val context: Context) {
         try {
             val cm = context.getSystemService(Context.CAMERA_SERVICE) as CameraManager
             val id = cm.cameraIdList.first()
-            torchOn = if (has(text, "बंद", "off")) false else true
+            torchOn = !has(text, "बंद", "off")
             cm.setTorchMode(id, torchOn)
             say(if (torchOn) "टॉर्च चालू" else "टॉर्च बंद")
         } catch (e: Exception) {
             say("टॉर्च नहीं चल पाई")
         }
+    }
+
+    private fun openCalendar() {
+        val uri = CalendarContract.CONTENT_URI.buildUpon().appendPath("time").build()
+        launch(Intent(Intent.ACTION_VIEW, uri))
+        say("कैलेंडर खोल रहा हूँ")
+    }
+
+    private fun shop(text: String) {
+        val query = strip(
+            text,
+            listOf("शॉपिंग", "shopping", "खरीदो", "खरीदना", "ऑर्डर", "करो", "करना", "मुझे", "अमेज़न", "पर")
+        )
+        val url = if (query.isEmpty()) {
+            "https://www.amazon.in"
+        } else {
+            "https://www.amazon.in/s?k=" + Uri.encode(query)
+        }
+        launch(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
+        say("शॉपिंग खोल रहा हूँ")
     }
 
     private fun setAlarm(text: String) {
@@ -139,7 +197,7 @@ class CommandHandler(private val context: Context) {
         val intent = Intent(AlarmClock.ACTION_SET_ALARM).apply {
             putExtra(AlarmClock.EXTRA_HOUR, hour)
             putExtra(AlarmClock.EXTRA_MINUTES, minute)
-            putExtra(AlarmClock.EXTRA_MESSAGE, "Myra")
+            putExtra(AlarmClock.EXTRA_MESSAGE, "Jarvis")
             putExtra(AlarmClock.EXTRA_SKIP_UI, true)
         }
         launch(intent)
@@ -168,7 +226,7 @@ class CommandHandler(private val context: Context) {
         )
         val url = "https://www.youtube.com/results?search_query=" + Uri.encode("$query song")
         launch(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
-        say("गाना खोज रही हूँ")
+        say("गाना खोज रहा हूँ")
     }
 
     private fun deleteApp(text: String) {
@@ -201,7 +259,7 @@ class CommandHandler(private val context: Context) {
             return false
         }
         launch(intent)
-        say("${app.first} खोल रही हूँ")
+        say("${app.first} खोल रहा हूँ")
         return true
     }
 
