@@ -14,6 +14,8 @@ class PhoneActions(
     private val say: (String) -> Unit
 ) {
 
+    private val extra = ExtraActions(context, say)
+
     private val filler = setOf(
         "टैप", "क्लिक", "click", "दबाओ", "करो", "कर", "दो", "पर", "को",
         "फोल्डर", "folder", "बनाओ", "बना", "नाम", "का", "से", "एक", "create"
@@ -22,6 +24,16 @@ class PhoneActions(
     // True लौटाए तो काम हो गया, वरना बाकी कोड आगे देखेगा
     fun handle(text: String): Boolean {
         return when {
+            has(text, "मौसम", "weather") -> {
+                extra.weather()
+                true
+            }
+
+            has(text, "गूगल अकाउंट", "google account", "जीमेल अकाउंट", "अकाउंट जोड़") -> {
+                extra.addGoogleAccount()
+                true
+            }
+
             has(text, "फोल्डर बना", "folder बना", "create folder") -> {
                 createFolder(words(text))
                 true
