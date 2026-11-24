@@ -7,8 +7,12 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.hardware.camera2.CameraManager
 import android.net.Uri
+import android.os.BatteryManager
+import android.os.Build
 import android.provider.AlarmClock
 import android.provider.CalendarContract
+import android.provider.ContactsContract
+import android.provider.MediaStore
 import android.provider.Settings
 import android.speech.tts.TextToSpeech
 import android.widget.Toast
@@ -84,11 +88,13 @@ class CommandHandler(private val context: Context) {
                 say("आज $now है")
             }
 
+            has(text, "बैटरी", "battery") -> batteryLevel()
+
             has(text, "कैलेंडर", "कैलेण्डर", "calendar") -> openCalendar()
 
             has(text, "अलार्म", "alarm") -> setAlarm(text)
 
-            has(text, "कॉल", "call", "फोन करो") -> makeCall(text)
+            has(text, "कॉल", "call", "फोन करो", "फोन लगाओ") -> makeCall(text)
 
             has(text, "गाना", "गाने", "song", "चलाओ", "बजाओ") -> playSong(text)
 
@@ -96,10 +102,7 @@ class CommandHandler(private val context: Context) {
 
             has(text, "शॉपिंग", "shopping", "खरीदो", "खरीदना", "ऑर्डर") -> shop(text)
 
-            has(text, "वाईफाई", "वाई-फाई", "wifi", "wi-fi") -> {
-                launch(Intent(Settings.ACTION_WIFI_SETTINGS))
-                say("वाईफाई की सेटिंग खोल रहा हूँ")
-            }
+            has(text, "वाईफाई", "वाई-फाई", "wifi", "wi-fi") -> openWifi()
 
             has(text, "ब्लूटूथ", "bluetooth") -> {
                 launch(Intent(Settings.ACTION_BLUETOOTH_SETTINGS))
@@ -162,6 +165,22 @@ class CommandHandler(private val context: Context) {
         }
     }
 
+    private fun batteryLevel() {
+        val bm = context.getSystemService(Context.BATTERY_SERVICE) as BatteryManager
+        val level = bm.getIntProperty(BatteryManager.BATTERY_PROPERTY_CAPACITY)
+        say("बैटरी $level प्रतिशत है")
+    }
+
+    private fun openWifi() {
+        val intent = if (Build.VERSION.SDK_INT >= 29) {
+            Intent(Settings.Panel.ACTION_INTERNET_CONNECTIVITY)
+        } else {
+            Intent(Settings.ACTION_WIFI_SETTINGS)
+        }
+        launch(intent)
+        say("वाईफाई का पैनल खोल रहा हूँ")
+    }
+
     private fun openCalendar() {
         val uri = CalendarContract.CONTENT_URI.buildUpon().appendPath("time").build()
         launch(Intent(Intent.ACTION_VIEW, uri))
@@ -206,18 +225,55 @@ class CommandHandler(private val context: Context) {
         say("अलार्म लग गया")
     }
 
+    private fun findContactNumber(name: String): String? {
+        val granted = ContextCompat.checkSelfPermission(
+            context, Manifest.permission.READ_CONTACTS
+        ) == PackageManager.PERMISSION_GRANTED
+        if (!granted) return null
+        val cursor = context.contentResolver.query(
+            ContactsContract.CommonDataKinds.Phone.CONTENT_URI,
+            arrayOf(
+                ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME,
+                ContactsContract.CommonDataKinds.Phone.NUMBER
+            ),
+            null, null, null
+        )
+        cursor?.use {
+            while (it.moveToNext()) {
+                val contact = it.getString(0)?.lowercase() ?: continue
+                if (contact.length >= 2 && (contact.contains(name) || name.contains(contact))) {
+                    return it.getString(1)
+                }
+            }
+        }
+        return null
+    }
+
     private fun makeCall(text: String) {
-        val digits = text.filter { it.isDigit() }
-        if (digits.length < 5) {
-            launch(Intent(Intent.ACTION_DIAL))
-            say("नंबर बोलकर कॉल करो")
-            return
+        var number = text.filter { it.isDigit() }
+        if (number.length < 5) {
+            val name = strip(
+                text,
+                listOf("कॉल", "call", "फोन", "करो", "को", "लगाओ", "कर", "दो", "मिलाओ")
+            )
+            if (name.isEmpty()) {
+                launch(Intent(Intent.ACTION_DIAL))
+                say("किसे कॉल करना है?")
+                return
+            }
+            val found = findContactNumber(name)
+            if (found == null) {
+                say("$name नाम का कॉन्टैक्ट नहीं मिला")
+                return
+            }
+            number = found
+            say("$name को कॉल कर रहा हूँ")
         }
         val granted = ContextCompat.checkSelfPermission(
             context, Manifest.permission.CALL_PHONE
         ) == PackageManager.PERMISSION_GRANTED
         val action = if (granted) Intent.ACTION_CALL else Intent.ACTION_DIAL
-        launch(Intent(action, Uri.parse("tel:$digits")))
+        launch(Intent(action, Uri.parse("tel:$number")))
     }
 
     private fun playSong(text: String) {
@@ -226,9 +282,18 @@ class CommandHandler(private val context: Context) {
             listOf("गाना", "गाने", "song", "चलाओ", "बजाओ", "चला दो", "बजा दो",
                 "यूट्यूब", "youtube", "पर", "play", "प्ले")
         )
-        val url = "https://www.youtube.com/results?search_query=" + Uri.encode("$query song")
-        launch(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
-        say("गाना खोज रहा हूँ")
+        val play = Intent(MediaStore.INTENT_ACTION_MEDIA_PLAY_FROM_SEARCH).apply {
+            putExtra(MediaStore.EXTRA_MEDIA_FOCUS, "vnd.android.cursor.item/*")
+            putExtra(SearchManager.QUERY, query)
+        }
+        if (play.resolveActivity(context.packageManager) != null) {
+            launch(play)
+            say("गाना चला रहा हूँ")
+        } else {
+            val url = "https://www.youtube.com/results?search_query=" + Uri.encode("$query song")
+            launch(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
+            say("गाना खोज रहा हूँ")
+        }
     }
 
     private fun deleteApp(text: String) {
