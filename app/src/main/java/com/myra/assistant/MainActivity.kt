@@ -477,4 +477,47 @@ class MainActivity : AppCompatActivity() {
             badge.text = "MIC LIVE"
             val sx = ObjectAnimator.ofFloat(avatar, View.SCALE_X, 0.96f, 1.07f).apply { repeatCount = ValueAnimator.INFINITE; repeatMode = ValueAnimator.REVERSE; duration = 500 }
             val sy = ObjectAnimator.ofFloat(avatar, View.SCALE_Y, 0.96f, 1.07f).apply { repeatCount = ValueAnimator.INFINITE; repeatMode = ValueAnimator.REVERSE; duration = 500 }
-            val rt = ObjectAnimator.ofFloat(avatar, View.ROTATION, -3.5f, 3.5f).apply { repeatCount = Va
+                        val rt = ObjectAnimator.ofFloat(avatar, View.ROTATION, -3.5f, 3.5f).apply { repeatCount = ValueAnimator.INFINITE; repeatMode = ValueAnimator.REVERSE; duration = 650 }
+            animSet = AnimatorSet().apply { playTogether(sx, sy, rt); start() }
+            waveAnim = ObjectAnimator.ofFloat(wave, View.SCALE_X, 0.55f, 1.15f).apply { repeatCount = ValueAnimator.INFINITE; repeatMode = ValueAnimator.REVERSE; duration = 300; start() }
+        } else {
+            statusTv.text = "JARVIS शांत (रिएक्शन OFF)"
+            statusTv.setTextColor(Color.parseColor("#9C6644"))
+            badge.text = "MIC IDLE"
+            avatar.scaleX = 1f; avatar.scaleY = 1f; avatar.rotation = 0f; wave.scaleX = 0.65f
+        }
+    }
+
+    private fun runCmd(cmd: String) {
+        runCatching {
+            val cl = Class.forName("com.myra.assistant.CommandHandler")
+            val inst = cl.getConstructor(Context::class.java).newInstance(this)
+            cl.methods.firstOrNull { it.parameterCount == 1 && it.parameterTypes[0] == String::class.java }?.invoke(inst, cmd)
+        }.onFailure { Toast.makeText(this, "कमांड: $cmd", Toast.LENGTH_SHORT).show() }
+    }
+
+    private fun askPerms() {
+        val p = mutableListOf(Manifest.permission.RECORD_AUDIO, Manifest.permission.CALL_PHONE, Manifest.permission.READ_CONTACTS, Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) p.add(Manifest.permission.POST_NOTIFICATIONS)
+        ActivityCompat.requestPermissions(this, p.toTypedArray(), 101)
+    }
+
+    private fun openOverlay() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && !Settings.canDrawOverlays(this)) {
+            startActivity(Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:$packageName")))
+        } else Toast.makeText(this, "Overlay अनुमति चालू है", Toast.LENGTH_SHORT).show()
+    }
+
+    private fun startSvc() {
+        runCatching {
+            val sc = Class.forName("com.myra.assistant.MyraService")
+            val it = Intent(this, sc)
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) startForegroundService(it) else startService(it)
+            Toast.makeText(this, "JARVIS सेवा शुरू", Toast.LENGTH_SHORT).show()
+        }.onFailure { Toast.makeText(this, "सेवा शुरू करने में समस्या", Toast.LENGTH_SHORT).show() }
+    }
+
+    override fun onDestroy() {
+        animSet?.cancel(); waveAnim?.cancel(); super.onDestroy()
+    }
+}
