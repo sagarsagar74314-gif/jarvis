@@ -82,6 +82,7 @@ class MainActivity : AppCompatActivity() {
         val list = mutableListOf(
             Manifest.permission.RECORD_AUDIO,
             Manifest.permission.CALL_PHONE,
+            Manifest.permission.READ_CONTACTS,
             Manifest.permission.CAMERA
         )
         if (Build.VERSION.SDK_INT >= 33) {
