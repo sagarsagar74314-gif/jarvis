@@ -28,29 +28,61 @@ class CommandHandler(private val context: Context) {
     private val brain = GeminiBrain(context)
     private val phone = PhoneActions(context) { say(it) }
 
-        private val hindiNames = mapOf(
+    // हिंदी में बोले जाने वाले नामों की अलग-अलग स्पेलिंग
+    private val aliases = mapOf(
         "यूट्यूब" to "youtube",
-        "यट" to "youtube",
-        "yt" to "youtube",
-        "वाइटी" to "youtube",
-        "व्हॉट्सऐप" to "whatsapp",
+        "यूटयूब" to "youtube",
+        "युट्यूब" to "youtube",
+        "यूटूब" to "youtube",
+        "यू ट्यूब" to "youtube",
         "व्हाट्सएप" to "whatsapp",
+        "व्हाट्सऐप" to "whatsapp",
+        "व्हाट्सअप" to "whatsapp",
+        "वाट्सएप" to "whatsapp",
+        "वाट्सऐप" to "whatsapp",
+        "वॉट्सएप" to "whatsapp",
+        "वॉट्सऐप" to "whatsapp",
         "कैमरा" to "camera",
+        "कैमेरा" to "camera",
+        "सेटिंग्स" to "settings",
         "सेटिंग" to "settings",
         "क्रोम" to "chrome",
+        "गूगल क्रोम" to "chrome",
         "गैलरी" to "gallery",
+        "गेलरी" to "gallery",
         "फेसबुक" to "facebook",
+        "फेस बुक" to "facebook",
         "इंस्टाग्राम" to "instagram",
+        "इन्स्टाग्राम" to "instagram",
+        "इंस्टा" to "instagram",
+        "टेलीग्राम" to "telegram",
+        "टेलीग्रैम" to "telegram",
         "जीमेल" to "gmail",
-        "मैप" to "maps",
+        "जी मेल" to "gmail",
         "मैप्स" to "maps",
+        "गूगल मैप" to "maps",
+        "मैप" to "maps",
         "स्नैपचैट" to "snapchat",
+        "स्नैप चैट" to "snapchat",
         "प्ले स्टोर" to "play store",
+        "प्लेस्टोर" to "play store",
         "कैलकुलेटर" to "calculator",
+        "केलकुलेटर" to "calculator",
         "घड़ी" to "clock",
+        "क्लॉक" to "clock",
         "अमेज़न" to "amazon",
-        "फ्लिपकार्ट" to "flipkart"
-    )        
+        "अमेजन" to "amazon",
+        "फ्लिपकार्ट" to "flipkart",
+        "स्पॉटिफाई" to "spotify",
+        "नेटफ्लिक्स" to "netflix",
+        "फोनपे" to "phonepe",
+        "फोन पे" to "phonepe",
+        "पेटीएम" to "paytm",
+        "फोटोज" to "photos",
+        "फोटो" to "photos",
+        "ड्राइव" to "drive",
+        "मैसेज" to "messages"
+    )
 
     init {
         tts = TextToSpeech(context) { status ->
@@ -77,6 +109,7 @@ class CommandHandler(private val context: Context) {
     fun handle(raw: String) {
         val text = raw.lowercase().trim()
         val short = text.length < 30
+        Toast.makeText(context, "सुना: $raw", Toast.LENGTH_SHORT).show()
         if (phone.handle(text)) return
 
         when {
@@ -123,19 +156,12 @@ class CommandHandler(private val context: Context) {
                 say("साउंड की सेटिंग खोल रहा हूँ")
             }
 
-            short && has(text, "सेटिंग", "settings") -> {
-                launch(Intent(Settings.ACTION_SETTINGS))
-                say("सेटिंग खोल रहा हूँ")
-            }
-
-            has(text, "मौसम", "weather") -> webSearch("आज का मौसम")
-
             has(text, "सर्च", "search", "खोजो", "ढूंढो", "ढूँढो") -> {
                 val query = strip(text, listOf("सर्च", "search", "करो", "खोजो", "ढूंढो", "ढूँढो", "गूगल", "google"))
                 webSearch(query)
             }
 
-            short && has(text, "खोल", "open", "ओपन", "चालू करो") -> openApp(text)
+            short && has(text, "खोल", "open", "ओपन", "चालू करो", "चालू कर") -> openApp(text)
 
             else -> {
                 // पहले देखो कि सिर्फ ऐप का नाम तो नहीं बोला, वरना AI से पूछो
@@ -155,6 +181,10 @@ class CommandHandler(private val context: Context) {
         var result = text
         words.forEach { result = result.replace(it, " ") }
         return result.trim().replace(Regex("\\s+"), " ")
+    }
+
+    private fun squash(s: String): String {
+        return s.lowercase().replace(Regex("[\\s\\-_.,।!?'\"\u200c\u200d]"), "")
     }
 
     private fun toggleTorch(text: String) {
@@ -317,15 +347,9 @@ class CommandHandler(private val context: Context) {
         }
         launch(intent)
     }
+
     private fun openApp(text: String, silent: Boolean = false): Boolean {
-        val cleaned = text
-            .replace("ओपन", " ")
-            .replace("खोलो", " ")
-            .replace("खोल", " ")
-            .replace("चालू करो", " ")
-            .replace("open", " ")
-            .trim()
-        val app = findApp(if (cleaned.isNotEmpty()) cleaned else text)
+        val app = findApp(text)
         if (app == null) {
             if (!silent) say("यह ऐप नहीं मिला")
             return false
@@ -341,24 +365,28 @@ class CommandHandler(private val context: Context) {
     }
 
     private fun findApp(text: String): Pair<String, String>? {
-        var fixed = text.lowercase().trim()
-        hindiNames.forEach { (hindi, english) ->
-            fixed = fixed.replace(hindi.lowercase(), english.lowercase())
-        }
+        var fixed = squash(text)
+        aliases.entries
+            .sortedByDescending { it.key.length }
+            .forEach { (hindi, english) ->
+                fixed = fixed.replace(squash(hindi), english)
+            }
 
         val pm = context.packageManager
         val main = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER)
         val apps = pm.queryIntentActivities(main, 0)
 
+        var best: Pair<String, String>? = null
+        var bestLength = 0
         for (info in apps) {
-            val label = info.loadLabel(pm).toString().lowercase()
-            val pkg = info.activityInfo.packageName.lowercase()
-            if (pkg == context.packageName.lowercase()) continue
-            if (fixed.contains(label) || label.contains(fixed) || pkg.contains(fixed)) {
-                return Pair(info.loadLabel(pm).toString(), info.activityInfo.packageName)
+            val label = squash(info.loadLabel(pm).toString())
+            val pkg = info.activityInfo.packageName
+            if (pkg == context.packageName) continue
+            if (label.length >= 3 && fixed.contains(label) && label.length > bestLength) {
+                best = Pair(info.loadLabel(pm).toString(), pkg)
+                bestLength = label.length
             }
         }
-        return null
+        return best
     }
-    
 }
