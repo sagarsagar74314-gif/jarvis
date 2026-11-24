@@ -10,6 +10,7 @@ import android.content.pm.ServiceInfo
 import android.graphics.Color
 import android.graphics.PixelFormat
 import android.graphics.drawable.GradientDrawable
+import android.media.AudioManager
 import android.os.Build
 import android.os.Bundle
 import android.os.Handler
@@ -34,8 +35,8 @@ class MyraService : Service() {
     private lateinit var commands: CommandHandler
 
     private val wakeWords = listOf(
-        "hey myra", "hey maira", "हे मायरा", "हे मैरा",
-        "myra", "maira", "मायरा", "मैरा"
+        "hey jarvis", "हे जार्विस", "हे जारविस", "हे जर्विस",
+        "jarvis", "जार्विस", "जारविस", "जर्विस", "जारवीस", "जार्वीस"
     )
 
     override fun onBind(intent: Intent?): IBinder? = null
@@ -45,22 +46,33 @@ class MyraService : Service() {
         windowManager = getSystemService(WINDOW_SERVICE) as WindowManager
         commands = CommandHandler(this)
         startAsForeground()
+        muteBeep(true)
         startListening()
     }
 
+    private fun muteBeep(mute: Boolean) {
+        try {
+            val audio = getSystemService(AUDIO_SERVICE) as AudioManager
+            val flag = if (mute) AudioManager.ADJUST_MUTE else AudioManager.ADJUST_UNMUTE
+            audio.adjustStreamVolume(AudioManager.STREAM_NOTIFICATION, flag, 0)
+            audio.adjustStreamVolume(AudioManager.STREAM_SYSTEM, flag, 0)
+        } catch (e: Exception) {
+        }
+    }
+
     private fun startAsForeground() {
-        val channelId = "myra_channel"
+        val channelId = "jarvis_channel"
         val manager = getSystemService(NOTIFICATION_SERVICE) as NotificationManager
         manager.createNotificationChannel(
-            NotificationChannel(channelId, "Myra AI", NotificationManager.IMPORTANCE_LOW)
+            NotificationChannel(channelId, "Jarvis", NotificationManager.IMPORTANCE_LOW)
         )
         val open = PendingIntent.getActivity(
             this, 0, Intent(this, MainActivity::class.java),
             PendingIntent.FLAG_IMMUTABLE
         )
         val notification = Notification.Builder(this, channelId)
-            .setContentTitle("Myra AI चालू है")
-            .setContentText("\"Hey Myra\" बोलो")
+            .setContentTitle("Jarvis चालू है")
+            .setContentText("\"Jarvis\" बोलो")
             .setSmallIcon(android.R.drawable.ic_btn_speak_now)
             .setContentIntent(open)
             .setOngoing(true)
@@ -83,9 +95,17 @@ class MyraService : Service() {
                     ?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
                     ?.firstOrNull() ?: ""
                 handleSpeech(text)
-                restart()
+                restart(700)
             }
-            override fun onError(error: Int) { restart() }
+            override fun onError(error: Int) {
+                val wait = when (error) {
+                    SpeechRecognizer.ERROR_NO_MATCH,
+                    SpeechRecognizer.ERROR_SPEECH_TIMEOUT -> 1200L
+                    SpeechRecognizer.ERROR_RECOGNIZER_BUSY -> 3000L
+                    else -> 2000L
+                }
+                restart(wait)
+            }
             override fun onReadyForSpeech(params: Bundle?) {}
             override fun onBeginningOfSpeech() {}
             override fun onRmsChanged(rmsdB: Float) {}
@@ -97,13 +117,17 @@ class MyraService : Service() {
         val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
             putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
             putExtra(RecognizerIntent.EXTRA_LANGUAGE, "hi-IN")
+            putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_COMPLETE_SILENCE_LENGTH_MILLIS, 1500L)
         }
         recognizer?.startListening(intent)
     }
 
-    private fun restart() {
-        handler.postDelayed({ startListening() }, 400)
+    private fun restart(delay: Long) {
+        handler.removeCallbacks(restartTask)
+        handler.postDelayed(restartTask, delay)
     }
+
+    private val restartTask = Runnable { startListening() }
 
     private fun handleSpeech(text: String) {
         val lower = text.lowercase().trim()
@@ -138,7 +162,7 @@ class MyraService : Service() {
         if (orb != null) return
         if (!Settings.canDrawOverlays(this)) return
         val view = TextView(this).apply {
-            text = "M"
+            text = "J"
             textSize = 28f
             gravity = Gravity.CENTER
             setTextColor(Color.WHITE)
@@ -168,6 +192,7 @@ class MyraService : Service() {
         handler.removeCallbacksAndMessages(null)
         recognizer?.destroy()
         hideOrb()
+        muteBeep(false)
         super.onDestroy()
     }
 }
