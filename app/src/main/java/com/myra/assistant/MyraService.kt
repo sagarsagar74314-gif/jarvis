@@ -7,29 +7,20 @@ import android.app.PendingIntent
 import android.app.Service
 import android.content.Intent
 import android.content.pm.ServiceInfo
-import android.graphics.Color
-import android.graphics.PixelFormat
-import android.graphics.drawable.GradientDrawable
 import android.media.AudioManager
 import android.os.Build
 import android.os.Bundle
 import android.os.Handler
 import android.os.IBinder
 import android.os.Looper
-import android.provider.Settings
 import android.speech.RecognitionListener
 import android.speech.RecognizerIntent
 import android.speech.SpeechRecognizer
-import android.view.Gravity
-import android.view.WindowManager
-import android.widget.TextView
 
 class MyraService : Service() {
 
     private var recognizer: SpeechRecognizer? = null
     private val handler = Handler(Looper.getMainLooper())
-    private var windowManager: WindowManager? = null
-    private var orb: TextView? = null
     private var awaiting = false
     private var running = true
     private lateinit var commands: CommandHandler
@@ -43,7 +34,6 @@ class MyraService : Service() {
 
     override fun onCreate() {
         super.onCreate()
-        windowManager = getSystemService(WINDOW_SERVICE) as WindowManager
         commands = CommandHandler(this)
         startAsForeground()
         muteBeep(true)
@@ -66,13 +56,15 @@ class MyraService : Service() {
         manager.createNotificationChannel(
             NotificationChannel(channelId, "Jarvis", NotificationManager.IMPORTANCE_LOW)
         )
-                  val intent = Intent(this, Class.forName("com.myra.assistant.MainActivity"))
-        val pendingIntent = PendingIntent.getActivity(this, 0, intent, PendingIntent.FLAG_IMMUTABLE)
+        val open = PendingIntent.getActivity(
+            this, 0, Intent(this, MainActivity::class.java),
+            PendingIntent.FLAG_IMMUTABLE
+        )
         val notification = Notification.Builder(this, channelId)
             .setContentTitle("Jarvis चालू है")
             .setContentText("\"Jarvis\" बोलो")
             .setSmallIcon(android.R.drawable.ic_btn_speak_now)
-            .setContentIntent(pendingIntent)
+            .setContentIntent(open)
             .setOngoing(true)
             .build()
         if (Build.VERSION.SDK_INT >= 29) {
@@ -133,63 +125,24 @@ class MyraService : Service() {
 
         if (awaiting) {
             awaiting = false
-            runCommand(lower)
+            commands.handle(lower)
             return
         }
 
         val hit = wakeWords.firstOrNull { lower.contains(it) } ?: return
-        showOrb()
         val rest = lower.substringAfter(hit).trim()
         if (rest.isEmpty()) {
             awaiting = true
-            handler.postDelayed({
-                awaiting = false
-                hideOrb()
-            }, 8000)
+            handler.postDelayed({ awaiting = false }, 8000)
         } else {
-            runCommand(rest)
+            commands.handle(rest)
         }
-    }
-
-    private fun runCommand(command: String) {
-        commands.handle(command)
-        handler.postDelayed({ hideOrb() }, 3000)
-    }
-
-    private fun showOrb() {
-        if (orb != null) return
-        if (!Settings.canDrawOverlays(this)) return
-        val view = TextView(this).apply {
-            text = "J"
-            textSize = 28f
-            gravity = Gravity.CENTER
-            setTextColor(Color.WHITE)
-            background = GradientDrawable().apply {
-                shape = GradientDrawable.OVAL
-                setColor(Color.parseColor("#7C4DFF"))
-            }
-        }
-        val params = WindowManager.LayoutParams(
-            180, 180,
-            WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
-            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
-                WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE,
-            PixelFormat.TRANSLUCENT
-        ).apply { gravity = Gravity.CENTER }
-        windowManager?.addView(view, params)
-        orb = view
-    }
-
-    private fun hideOrb() {
-        orb?.let { windowManager?.removeView(it) }
-        orb = null
     }
 
     override fun onDestroy() {
         running = false
         handler.removeCallbacksAndMessages(null)
         recognizer?.destroy()
-        hideOrb()
         muteBeep(false)
         super.onDestroy()
     }
