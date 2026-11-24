@@ -22,6 +22,7 @@ class CommandHandler(private val context: Context) {
     private var torchOn = false
     private var tts: TextToSpeech? = null
     private val brain = GeminiBrain(context)
+    private val phone = PhoneActions(context) { say(it) }
 
     private val hindiNames = mapOf(
         "यूट्यूब" to "youtube",
@@ -68,6 +69,7 @@ class CommandHandler(private val context: Context) {
     fun handle(raw: String) {
         val text = raw.lowercase().trim()
         val short = text.length < 30
+        if (phone.handle(text)) return
 
         when {
             short && has(text, "फ्लैशलाइट", "फ्लैश", "टॉर्च", "torch", "flashlight") -> toggleTorch(text)
