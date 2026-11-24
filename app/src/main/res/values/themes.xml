@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="Theme.Myra" parent="Theme.MaterialComponents.DayNight.NoActionBar">
+        <item name="colorPrimary">#7C4DFF</item>
+        <item name="colorPrimaryDark">#1A0F33</item>
+        <item name="colorAccent">#00E5FF</item>
+        <item name="android:windowBackground">#0D0B1A</item>
+        <item name="android:statusBarColor">#0D0B1A</item>
+    </style>
+</resources>
