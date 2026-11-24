@@ -1,222 +1,126 @@
 package com.myra.assistant
 
-import android.animation.ObjectAnimator
-import android.animation.PropertyValuesHolder
-import android.animation.ValueAnimator
-import android.app.Notification
-import android.app.NotificationChannel
-import android.app.NotificationManager
-import android.app.PendingIntent
-import android.app.Service
+import android.Manifest
+import android.content.Context
 import android.content.Intent
-import android.content.pm.ServiceInfo
+import android.content.pm.PackageManager
 import android.graphics.Color
-import android.graphics.PixelFormat
-import android.graphics.drawable.GradientDrawable
-import android.media.AudioManager
+import android.net.Uri
 import android.os.Build
 import android.os.Bundle
-import android.os.Handler
-import android.os.IBinder
-import android.os.Looper
 import android.provider.Settings
-import android.speech.RecognitionListener
-import android.speech.RecognizerIntent
-import android.speech.SpeechRecognizer
+import android.text.InputType
 import android.view.Gravity
-import android.view.WindowManager
+import android.widget.Button
+import android.widget.EditText
+import android.widget.LinearLayout
+import android.widget.ScrollView
 import android.widget.TextView
+import android.widget.Toast
+import androidx.appcompat.app.AppCompatActivity
+import androidx.core.app.ActivityCompat
+import androidx.core.content.ContextCompat
 
-class MyraService : Service() {
+class MainActivity : AppCompatActivity() {
 
-    private var recognizer: SpeechRecognizer? = null
-    private val handler = Handler(Looper.getMainLooper())
-    private var windowManager: WindowManager? = null
-    private var orb: TextView? = null
-    private var orbAnimator: ObjectAnimator? = null
-    private var awaiting = false
-    private var running = true
-    private lateinit var commands: CommandHandler
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
 
-    private val wakeWords = listOf(
-        "hey jarvis", "हे जार्विस", "हे जारविस", "हे जर्विस",
-        "jarvis", "जार्विस", "जारविस", "जर्विस", "जारवीस", "जार्वीस"
-    )
-
-    override fun onBind(intent: Intent?): IBinder? = null
-
-    override fun onCreate() {
-        super.onCreate()
-        windowManager = getSystemService(WINDOW_SERVICE) as WindowManager
-        commands = CommandHandler(this)
-        startAsForeground()
-        muteBeep(true)
-        startListening()
-    }
-
-    private fun muteBeep(mute: Boolean) {
-        try {
-            val audio = getSystemService(AUDIO_SERVICE) as AudioManager
-            val flag = if (mute) AudioManager.ADJUST_MUTE else AudioManager.ADJUST_UNMUTE
-            audio.adjustStreamVolume(AudioManager.STREAM_NOTIFICATION, flag, 0)
-            audio.adjustStreamVolume(AudioManager.STREAM_SYSTEM, flag, 0)
-        } catch (e: Exception) {
+        val root = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            gravity = Gravity.CENTER_HORIZONTAL
+            setPadding(48, 96, 48, 48)
         }
-    }
 
-    private fun startAsForeground() {
-        val channelId = "jarvis_channel"
-        val manager = getSystemService(NOTIFICATION_SERVICE) as NotificationManager
-        manager.createNotificationChannel(
-            NotificationChannel(channelId, "Jarvis", NotificationManager.IMPORTANCE_LOW)
-        )
-        val open = PendingIntent.getActivity(
-            this, 0, Intent(this, MainActivity::class.java),
-            PendingIntent.FLAG_IMMUTABLE
-        )
-        val notification = Notification.Builder(this, channelId)
-            .setContentTitle("Jarvis चालू है")
-            .setContentText("\"Jarvis\" बोलो")
-            .setSmallIcon(android.R.drawable.ic_btn_speak_now)
-            .setContentIntent(open)
-            .setOngoing(true)
-            .build()
-        if (Build.VERSION.SDK_INT >= 29) {
-            startForeground(1, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE)
-        } else {
-            startForeground(1, notification)
-        }
-    }
-
-    private fun startListening() {
-        if (!running) return
-        if (!SpeechRecognizer.isRecognitionAvailable(this)) return
-        recognizer?.destroy()
-        recognizer = SpeechRecognizer.createSpeechRecognizer(this)
-        recognizer?.setRecognitionListener(object : RecognitionListener {
-            override fun onResults(results: Bundle?) {
-                val text = results
-                    ?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
-                    ?.firstOrNull() ?: ""
-                handleSpeech(text)
-                restart(700)
-            }
-            override fun onError(error: Int) {
-                val wait = when (error) {
-                    SpeechRecognizer.ERROR_NO_MATCH,
-                    SpeechRecognizer.ERROR_SPEECH_TIMEOUT -> 1200L
-                    SpeechRecognizer.ERROR_RECOGNIZER_BUSY -> 3000L
-                    else -> 2000L
-                }
-                restart(wait)
-            }
-            override fun onReadyForSpeech(params: Bundle?) {}
-            override fun onBeginningOfSpeech() {}
-            override fun onRmsChanged(rmsdB: Float) {}
-            override fun onBufferReceived(buffer: ByteArray?) {}
-            override fun onEndOfSpeech() {}
-            override fun onPartialResults(partialResults: Bundle?) {}
-            override fun onEvent(eventType: Int, params: Bundle?) {}
+        root.addView(TextView(this).apply {
+            text = "Jarvis"
+            textSize = 30f
+            setTextColor(Color.WHITE)
+            gravity = Gravity.CENTER
+            setPadding(0, 0, 0, 48)
         })
-        val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
-            putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
-            putExtra(RecognizerIntent.EXTRA_LANGUAGE, "hi-IN")
-            putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_COMPLETE_SILENCE_LENGTH_MILLIS, 1500L)
+
+        root.addView(makeButton("1. परमिशन दो") { askPermissions() })
+        root.addView(makeButton("2. ओवरले चालू करो") { openOverlaySettings() })
+        root.addView(makeButton("3. एक्सेसिबिलिटी चालू करो") {
+            startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
+        })
+
+        val keyBox = EditText(this).apply {
+            hint = "Gemini key यहाँ डालो"
+            setHintTextColor(Color.GRAY)
+            setTextColor(Color.WHITE)
+            inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD
+            setSingleLine(true)
         }
-        recognizer?.startListening(intent)
+        root.addView(keyBox)
+
+        root.addView(makeButton("4. Key सेव करो") {
+            val key = keyBox.text.toString().trim()
+            if (key.isEmpty()) {
+                Toast.makeText(this, "पहले key डालो", Toast.LENGTH_SHORT).show()
+            } else {
+                getSharedPreferences("jarvis_prefs", Context.MODE_PRIVATE)
+                    .edit().putString("gemini_key", key).apply()
+                keyBox.setText("")
+                Toast.makeText(this, "Key सेव हो गई", Toast.LENGTH_SHORT).show()
+            }
+        })
+
+        root.addView(makeButton("5. Jarvis शुरू करो") { startJarvis() })
+
+        setContentView(ScrollView(this).apply { addView(root) })
     }
 
-    private fun restart(delay: Long) {
-        handler.removeCallbacks(restartTask)
-        handler.postDelayed(restartTask, delay)
+    private fun makeButton(label: String, onTap: () -> Unit): Button {
+        return Button(this).apply {
+            text = label
+            setOnClickListener {
+                try {
+                    onTap()
+                } catch (e: Exception) {
+                    Toast.makeText(
+                        this@MainActivity,
+                        "दिक्कत: " + e.javaClass.simpleName + " " + (e.message ?: ""),
+                        Toast.LENGTH_LONG
+                    ).show()
+                }
+            }
+        }
     }
 
-    private val restartTask = Runnable { startListening() }
+    private fun askPermissions() {
+        val list = mutableListOf(
+            Manifest.permission.RECORD_AUDIO,
+            Manifest.permission.CALL_PHONE,
+            Manifest.permission.READ_CONTACTS,
+            Manifest.permission.ACCESS_FINE_LOCATION,
+            Manifest.permission.ACCESS_COARSE_LOCATION,
+            Manifest.permission.CAMERA
+        )
+        if (Build.VERSION.SDK_INT >= 33) {
+            list.add(Manifest.permission.POST_NOTIFICATIONS)
+        }
+        ActivityCompat.requestPermissions(this, list.toTypedArray(), 1)
+    }
 
-    private fun handleSpeech(text: String) {
-        val lower = text.lowercase().trim()
-        if (lower.isEmpty()) return
+    private fun openOverlaySettings() {
+        val intent = Intent(
+            Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+            Uri.parse("package:$packageName")
+        )
+        startActivity(intent)
+    }
 
-        if (awaiting) {
-            awaiting = false
-            runCommand(lower)
+    private fun startJarvis() {
+        val micGranted = ContextCompat.checkSelfPermission(
+            this, Manifest.permission.RECORD_AUDIO
+        ) == PackageManager.PERMISSION_GRANTED
+        if (!micGranted) {
+            Toast.makeText(this, "पहले बटन 1 से माइक की इजाज़त दो", Toast.LENGTH_LONG).show()
             return
         }
-
-        val hit = wakeWords.firstOrNull { lower.contains(it) } ?: return
-        showOrb()
-        val rest = lower.substringAfter(hit).trim()
-        if (rest.isEmpty()) {
-            awaiting = true
-            handler.postDelayed({
-                awaiting = false
-                hideOrb()
-            }, 8000)
-        } else {
-            runCommand(rest)
-        }
-    }
-
-    private fun runCommand(command: String) {
-        commands.handle(command)
-        handler.postDelayed({ hideOrb() }, 3000)
-    }
-
-    private fun showOrb() {
-        if (orb != null) return
-        if (!Settings.canDrawOverlays(this)) return
-        val view = TextView(this).apply {
-            text = "J"
-            textSize = 30f
-            gravity = Gravity.CENTER
-            setTextColor(Color.WHITE)
-            background = GradientDrawable().apply {
-                shape = GradientDrawable.OVAL
-                gradientType = GradientDrawable.RADIAL_GRADIENT
-                gradientRadius = 120f
-                colors = intArrayOf(
-                    Color.parseColor("#00E5FF"),
-                    Color.parseColor("#7C4DFF"),
-                    Color.parseColor("#1A0F33")
-                )
-                setStroke(4, Color.parseColor("#00E5FF"))
-            }
-        }
-        val params = WindowManager.LayoutParams(
-            240, 240,
-            WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
-            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
-                WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE,
-            PixelFormat.TRANSLUCENT
-        ).apply { gravity = Gravity.CENTER }
-        windowManager?.addView(view, params)
-        orb = view
-
-        orbAnimator = ObjectAnimator.ofPropertyValuesHolder(
-            view,
-            PropertyValuesHolder.ofFloat("scaleX", 1f, 1.2f),
-            PropertyValuesHolder.ofFloat("scaleY", 1f, 1.2f)
-        ).apply {
-            duration = 700
-            repeatCount = ValueAnimator.INFINITE
-            repeatMode = ValueAnimator.REVERSE
-            start()
-        }
-    }
-
-    private fun hideOrb() {
-        orbAnimator?.cancel()
-        orbAnimator = null
-        orb?.let { windowManager?.removeView(it) }
-        orb = null
-    }
-
-    override fun onDestroy() {
-        running = false
-        handler.removeCallbacksAndMessages(null)
-        recognizer?.destroy()
-        hideOrb()
-        muteBeep(false)
-        super.onDestroy()
+        ContextCompat.startForegroundService(this, Intent(this, MyraService::class.java))
+        Toast.makeText(this, "Jarvis शुरू हो गया", Toast.LENGTH_SHORT).show()
     }
 }
