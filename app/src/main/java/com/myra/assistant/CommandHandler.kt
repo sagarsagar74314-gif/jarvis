@@ -28,10 +28,13 @@ class CommandHandler(private val context: Context) {
     private val brain = GeminiBrain(context)
     private val phone = PhoneActions(context) { say(it) }
 
-    private val hindiNames = mapOf(
+        private val hindiNames = mapOf(
         "यूट्यूब" to "youtube",
+        "यट" to "youtube",
+        "yt" to "youtube",
+        "वाइटी" to "youtube",
+        "व्हॉट्सऐप" to "whatsapp",
         "व्हाट्सएप" to "whatsapp",
-        "व्हाट्सऐप" to "whatsapp",
         "कैमरा" to "camera",
         "सेटिंग" to "settings",
         "क्रोम" to "chrome",
@@ -40,13 +43,14 @@ class CommandHandler(private val context: Context) {
         "इंस्टाग्राम" to "instagram",
         "जीमेल" to "gmail",
         "मैप" to "maps",
+        "मैप्स" to "maps",
         "स्नैपचैट" to "snapchat",
         "प्ले स्टोर" to "play store",
         "कैलकुलेटर" to "calculator",
         "घड़ी" to "clock",
         "अमेज़न" to "amazon",
         "फ्लिपकार्ट" to "flipkart"
-    )
+    )        
 
     init {
         tts = TextToSpeech(context) { status ->
@@ -313,9 +317,15 @@ class CommandHandler(private val context: Context) {
         }
         launch(intent)
     }
-
     private fun openApp(text: String, silent: Boolean = false): Boolean {
-        val app = findApp(text)
+        val cleaned = text
+            .replace("ओपन", " ")
+            .replace("खोलो", " ")
+            .replace("खोल", " ")
+            .replace("चालू करो", " ")
+            .replace("open", " ")
+            .trim()
+        val app = findApp(if (cleaned.isNotEmpty()) cleaned else text)
         if (app == null) {
             if (!silent) say("यह ऐप नहीं मिला")
             return false
@@ -331,24 +341,24 @@ class CommandHandler(private val context: Context) {
     }
 
     private fun findApp(text: String): Pair<String, String>? {
-        var fixed = text
-        hindiNames.forEach { (hindi, english) -> fixed = fixed.replace(hindi, english) }
+        var fixed = text.lowercase().trim()
+        hindiNames.forEach { (hindi, english) ->
+            fixed = fixed.replace(hindi.lowercase(), english.lowercase())
+        }
 
         val pm = context.packageManager
         val main = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER)
         val apps = pm.queryIntentActivities(main, 0)
 
-        var best: Pair<String, String>? = null
-        var bestLength = 0
         for (info in apps) {
             val label = info.loadLabel(pm).toString().lowercase()
-            val pkg = info.activityInfo.packageName
-            if (pkg == context.packageName) continue
-            if (label.length >= 3 && fixed.contains(label) && label.length > bestLength) {
-                best = Pair(label, pkg)
-                bestLength = label.length
+            val pkg = info.activityInfo.packageName.lowercase()
+            if (pkg == context.packageName.lowercase()) continue
+            if (fixed.contains(label) || label.contains(fixed) || pkg.contains(fixed)) {
+                return Pair(info.loadLabel(pm).toString(), info.activityInfo.packageName)
             }
         }
-        return best
+        return null
     }
+    
 }
