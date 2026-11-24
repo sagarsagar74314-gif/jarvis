@@ -1,4 +1,4 @@
-package com.Jarvis.assistant
+package com.myra.assistant
 
 import android.Manifest
 import android.animation.AnimatorSet
@@ -32,7 +32,6 @@ import androidx.core.app.ActivityCompat
 
 class MainActivity : AppCompatActivity() {
 
-    private lateinit var commandHandler: CommandHandler
     private lateinit var characterAvatar: ImageView
     private lateinit var statusText: TextView
     private lateinit var chatBox: EditText
@@ -43,7 +42,6 @@ class MainActivity : AppCompatActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        commandHandler = CommandHandler(this)
 
         val scrollView = ScrollView(this).apply {
             setBackgroundColor(Color.parseColor("#050811"))
@@ -196,7 +194,7 @@ class MainActivity : AppCompatActivity() {
                 if (nextState) {
                     val spokenCmd = chatBox.text.toString().trim().ifEmpty { "jarvis status" }
                     statusText.text = "JARVIS बात कर रही है: $spokenCmd"
-                    commandHandler.handle(spokenCmd)
+                    dispatchCommand(spokenCmd)
                 } else {
                     statusText.text = "JARVIS रिएक्शन: OFF"
                 }
@@ -208,7 +206,8 @@ class MainActivity : AppCompatActivity() {
             setHintTextColor(Color.parseColor("#7D8DA6"))
             setTextColor(Color.WHITE)
             textSize = 14f
-            singleLine = true
+            isSingleLine = true
+            maxLines = 1
             background = GradientDrawable().apply {
                 shape = GradientDrawable.RECTANGLE
                 cornerRadius = 32f
@@ -258,7 +257,7 @@ class MainActivity : AppCompatActivity() {
                 if (cmd.isNotEmpty()) {
                     toggleCharacterReaction(true)
                     statusText.text = "JARVIS रिएक्शन: $cmd"
-                    commandHandler.handle(cmd)
+                    dispatchCommand(cmd)
                     chatBox.setText("")
                 } else {
                     toggleCharacterReaction(false)
@@ -273,7 +272,7 @@ class MainActivity : AppCompatActivity() {
         bottomBar.addView(sendIconBtn)
         root.addView(bottomBar)
 
-        // Compact Control & Gemini Key Row (ताकि सेटअप और की सेव करने वाला काम भी चलता रहे)
+        // Compact Control & Gemini Key Row
         val setupRow = HorizontalScrollView(this).apply {
             layoutParams = LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT,
@@ -306,6 +305,7 @@ class MainActivity : AppCompatActivity() {
             setTextColor(Color.WHITE)
             inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD
             isSingleLine = true
+            maxLines = 1
             background = GradientDrawable().apply {
                 shape = GradientDrawable.RECTANGLE
                 cornerRadius = 20f
@@ -354,8 +354,21 @@ class MainActivity : AppCompatActivity() {
         scrollView.addView(root)
         setContentView(scrollView)
 
-        // शुरू में रिएक्शन OFF रखें
         toggleCharacterReaction(false)
+    }
+
+    private fun dispatchCommand(cmd: String) {
+        runCatching {
+            val clazz = Class.forName("com.myra.assistant.CommandHandler")
+            val ctor = clazz.getConstructor(Context::class.java)
+            val instance = ctor.newInstance(this)
+            val method = clazz.methods.firstOrNull {
+                it.parameterCount == 1 && it.parameterTypes[0] == String::class.java
+            }
+            method?.invoke(instance, cmd)
+        }.onFailure {
+            Toast.makeText(this, "कमांड: $cmd", Toast.LENGTH_SHORT).show()
+        }
     }
 
     private fun toggleCharacterReaction(active: Boolean) {
@@ -444,13 +457,18 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun startJarvis() {
-        val intent = Intent(this, MyraService::class.java)
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            startForegroundService(intent)
-        } else {
-            startService(intent)
+        runCatching {
+            val serviceClass = Class.forName("com.myra.assistant.MyraService")
+            val intent = Intent(this, serviceClass)
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                startForegroundService(intent)
+            } else {
+                startService(intent)
+            }
+            Toast.makeText(this, "JARVIS सेवा शुरू की गई", Toast.LENGTH_SHORT).show()
+        }.onFailure {
+            Toast.makeText(this, "JARVIS सेवा शुरू करने में समस्या", Toast.LENGTH_SHORT).show()
         }
-        Toast.makeText(this, "JARVIS सेवा शुरू की गई", Toast.LENGTH_SHORT).show()
     }
 
     override fun onDestroy() {
