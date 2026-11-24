@@ -167,7 +167,7 @@ class MainActivity : AppCompatActivity() {
 
         // MIC LIVE Pill Badge
         micLiveBadge = TextView(this).apply {
-            text = "🎙  MIC LIVE"
+            text = "MIC LIVE"
             textSize = 11f
             setTypeface(null, Typeface.BOLD)
             setTextColor(Color.parseColor("#FF7A3D"))
@@ -304,8 +304,9 @@ class MainActivity : AppCompatActivity() {
         }
 
         val eyeBtn = Button(this).apply {
-            text = "👁"
-            textSize = 17f
+            text = "EYE"
+            textSize = 11f
+            setTypeface(null, Typeface.BOLD)
             setTextColor(Color.WHITE)
             background = GradientDrawable().apply {
                 shape = GradientDrawable.OVAL
@@ -320,7 +321,7 @@ class MainActivity : AppCompatActivity() {
         }
 
         val stopSessionBtn = Button(this).apply {
-            text = "■  Stop session"
+            text = "Stop session"
             textSize = 16f
             setTypeface(null, Typeface.BOLD)
             setTextColor(Color.WHITE)
@@ -339,8 +340,9 @@ class MainActivity : AppCompatActivity() {
         }
 
         val micBtn = Button(this).apply {
-            text = "🎙"
-            textSize = 17f
+            text = "MIC"
+            textSize = 12f
+            setTypeface(null, Typeface.BOLD)
             setTextColor(Color.parseColor("#F56A18"))
             background = GradientDrawable().apply {
                 shape = GradientDrawable.OVAL
@@ -439,7 +441,7 @@ class MainActivity : AppCompatActivity() {
         }
 
         val testVoiceTv = TextView(this).apply {
-            text = "🎧 Test voice"
+            text = "Test voice"
             textSize = 12f
             setTextColor(Color.parseColor("#C8C8C8"))
             setPadding(12, 8, 12, 8)
@@ -460,7 +462,7 @@ class MainActivity : AppCompatActivity() {
         }
 
         val typeTv = TextView(this).apply {
-            text = "⌨ Type"
+            text = "Type"
             textSize = 12f
             setTextColor(Color.parseColor("#C8C8C8"))
             setPadding(12, 8, 12, 8)
@@ -545,5 +547,4 @@ class MainActivity : AppCompatActivity() {
                 if (key.isEmpty()) {
                     Toast.makeText(this@MainActivity, "पहले key डालें", Toast.LENGTH_SHORT).show()
                 } else {
-                    getSharedPreferences("jarvis_prefs", Context.MODE_PRIVATE)
-      
+     
