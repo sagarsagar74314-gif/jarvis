@@ -69,12 +69,12 @@ class MyraService : Service() {
                 val intent = Intent(this, Class.forName("com.myra.assistant.MainActivity"))
         val pendingIntent = PendingIntent.getActivity(this, 0, intent, PendingIntent.FLAG_IMMUTABLE)
             PendingIntent.FLAG_IMMUTABLE
-        )
+                val openIntent = intent
         val notification = Notification.Builder(this, channelId)
             .setContentTitle("Jarvis चालू है")
             .setContentText("\"Jarvis\" बोलो")
             .setSmallIcon(android.R.drawable.ic_btn_speak_now)
-            .setContentIntent(open)
+            .setContentIntent
             .setOngoing(true)
             .build()
         if (Build.VERSION.SDK_INT >= 29) {
